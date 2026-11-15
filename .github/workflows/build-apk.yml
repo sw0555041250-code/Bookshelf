@@ -31,26 +31,26 @@ jobs:
         run: |
           set -o pipefail
           gradle :app:assembleRelease --no-daemon --stacktrace 2>&1 | tee build.log
-          cp app/build/outputs/apk/release/app-release.apk Kviut.apk
-          ls -la Kviut.apk
+          cp app/build/outputs/apk/release/app-release.apk Sedarim.apk
+          ls -la Sedarim.apk
 
       - name: Upload APK artifact
         uses: actions/upload-artifact@v4
         with:
-          name: Kviut-apk
-          path: Kviut.apk
+          name: Sedarim-apk
+          path: Sedarim.apk
 
       - name: Publish release
         if: github.ref == 'refs/heads/main'
         uses: softprops/action-gh-release@v2
         with:
           tag_name: v1.0.${{ env.VER }}
-          name: קביעות 1.0.${{ env.VER }}
+          name: סדרים 1.0.${{ env.VER }}
           body: |
-            קביעות – קביעות עתים לתורה: סדר הלימוד היומי, תזכורות ומעקב התקדמות. מותאם למסכי E-ink.
-            הורידו את Kviut.apk והתקינו. מי שכבר מותקן אצלו – העדכון שומר על כל הנתונים.
+            סדרים – סדר הלימוד היומי, כמו הסדרים בישיבה, תזכורות ומעקב התקדמות. מותאם למסכי E-ink.
+            הורידו את Sedarim.apk והתקינו. מי שכבר מותקן אצלו – העדכון שומר על כל הנתונים.
             ${{ github.event.head_commit.message }}
-          files: Kviut.apk
+          files: Sedarim.apk
           make_latest: true
 
       - name: Show compile errors

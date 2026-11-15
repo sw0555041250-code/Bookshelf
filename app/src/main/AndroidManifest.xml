@@ -25,7 +25,7 @@
 
     <application
         android:name=".App"
-        android:label="קביעות"
+        android:label="סדרים"
         android:icon="@mipmap/ic_launcher"
         android:supportsRtl="true"
         android:allowBackup="true"

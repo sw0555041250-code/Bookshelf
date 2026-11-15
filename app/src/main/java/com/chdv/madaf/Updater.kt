@@ -23,8 +23,8 @@ import java.net.URL
  */
 object Updater {
     const val REPO = "sw0555041250-code/Bookshelf"
-    const val APP_TO = "לקביעות"
-    const val APP = "קביעות"
+    const val APP_TO = "לסדרים"
+    const val APP = "סדרים"
 
     private val main by lazy { Handler(Looper.getMainLooper()) }
     @Volatile private var busy = false
