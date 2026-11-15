@@ -8,7 +8,7 @@
 
 ## ⬇️ הורדה
 
-**[להורדת Madaf.apk מהגרסה האחרונה](../../releases/latest/download/Madaf.apk)**
+**[להורדת Madaf.apk מהגרסה האחרונה](https://github.com/sw0555041250-code/Bookshelf/releases/latest/download/Madaf.apk)**
 
 ## מה זה עושה
 
