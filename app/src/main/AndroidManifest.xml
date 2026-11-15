@@ -9,6 +9,8 @@
 
     <!-- to list apps that can be linked to a lesson -->
     <queries>
+        <!-- Search Plus opens PDF books at an exact page -->
+        <package android:name="com.chdv.searchplus" />
         <intent>
             <action android:name="android.intent.action.MAIN" />
             <category android:name="android.intent.category.LAUNCHER" />

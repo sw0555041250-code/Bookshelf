@@ -97,6 +97,7 @@ object Reminders {
 
     fun fire(ctx: Context, minute: Int) {
         Store.load(ctx)
+        Store.rollover()
         val items = due(minute)
         if (items.isNotEmpty() && !quiet(LocalDateTime.now())) notify(ctx, items)
         schedule(ctx)
@@ -105,7 +106,7 @@ object Reminders {
     fun notify(ctx: Context, items: List<Item>) {
         val name = Store.settings.name.ifBlank { null }
         val title = if (name != null) "$name, עדיין לא למדת היום" else "עדיין לא למדת היום"
-        val body = items.joinToString(" · ") { it.title }
+        val body = items.joinToString(" · ") { describe(it) }
         val open = PendingIntent.getActivity(ctx, 3,
             Intent(ctx, ReminderActivity::class.java).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP),
             PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE)
@@ -116,7 +117,7 @@ object Reminders {
             .setSmallIcon(R.drawable.ic_stat)
             .setContentTitle(title)
             .setContentText(body)
-            .setStyle(Notification.BigTextStyle().bigText(items.joinToString("\n") { "▫ " + it.title + (if (it.note.isNotBlank()) " – ${it.note}" else "") }))
+            .setStyle(Notification.BigTextStyle().bigText(items.joinToString("\n") { "▫ " + describe(it) + (if (it.note.isNotBlank()) " – ${it.note}" else "") }))
             .setContentIntent(open)
             .setAutoCancel(true)
             .setCategory(Notification.CATEGORY_REMINDER)
@@ -124,6 +125,16 @@ object Reminders {
             .addAction(Notification.Action.Builder(null, "עוד ${Store.settings.snoozeMinutes} דק׳", snooze).build())
         if (Store.settings.fullScreen) b.setFullScreenIntent(open, true)
         ctx.getSystemService(NotificationManager::class.java).notify(NOTIF_ID, b.build())
+    }
+
+    /** "רמב\"ם – הלכות תפילה ה׳–ז׳" */
+    fun describe(item: Item): String {
+        val t = item.track
+        if (item.isTrack && t != null) {
+            val p = t.portionLabel()
+            return if (p.isBlank()) item.title else "${item.title}: $p"
+        }
+        return item.title
     }
 
     fun cancel(ctx: Context) = ctx.getSystemService(NotificationManager::class.java).cancel(NOTIF_ID)

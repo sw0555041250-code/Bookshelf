@@ -10,8 +10,11 @@ import java.time.LocalDateTime
 import java.time.temporal.ChronoUnit
 import java.util.UUID
 
-/** CHECK = something to tick off (optionally in parts). UNITS = a list of units to get through. */
-enum class Kind { CHECK, UNITS }
+/**
+ * CHECK = something to tick off (optionally in parts). UNITS = a list of units to finish (a goal).
+ * TRACK = a running sequence (dapim, chapters, pages…) with a daily/weekly quota that continues from where you stopped.
+ */
+enum class Kind { CHECK, UNITS, TRACK }
 
 /** DAILY / WEEKLY repeat; ONCE = a goal that is done once (optionally with a target date). */
 enum class Freq { DAILY, WEEKLY, ONCE }
@@ -38,6 +41,10 @@ class Item(
     /** ONCE goals: target date (epoch day) or null. */
     var deadline: Long? = null,
     var archived: Boolean = false,
+    /** TRACK items: the sequence and position */
+    var track: Track? = null,
+    /** "chitas": show today's Tehillim / Chumash next to the parts */
+    var special: String = "",
 ) {
     fun toJson(): JSONObject = JSONObject().apply {
         put("id", id); put("title", title); put("category", category)
@@ -47,11 +54,14 @@ class Item(
         put("linkType", linkType); put("link", link); put("linkLabel", linkLabel)
         deadline?.let { put("deadline", it) }
         put("archived", archived)
+        track?.let { put("track", it.toJson()) }
+        put("special", special)
     }
 
     fun copy(): Item = fromJson(toJson())
 
     val isUnits get() = kind == Kind.UNITS
+    val isTrack get() = kind == Kind.TRACK && track != null
     val unitsTotal get() = parts.size
     val unitsLeft get() = (parts.indices.count { it !in unitsDone })
     fun dueOn(date: LocalDate) = days and (1 shl dowIndex(date)) != 0
@@ -73,6 +83,8 @@ class Item(
             linkLabel = o.optString("linkLabel"),
             deadline = if (o.has("deadline")) o.optLong("deadline") else null,
             archived = o.optBoolean("archived"),
+            track = Track.fromJson(o.optJSONObject("track")),
+            special = o.optString("special"),
         )
     }
 }
@@ -168,7 +180,7 @@ object Store {
 
     private fun trimLog() {
         val oldest = LocalDate.now().minusDays(800).toString()
-        log.keys.filter { it.substring(2) < oldest }.forEach { log.remove(it) }
+        log.keys.filter { (it.startsWith("d:") || it.startsWith("w:")) && it.substring(2) < oldest }.forEach { log.remove(it) }
     }
 
     // ----- time -----
@@ -192,6 +204,11 @@ object Store {
     /** Done for the period of [d]. For UNITS: progress was made (or marked) in that period; ONCE goals: finished. */
     @Synchronized
     fun isDone(item: Item, d: LocalDate): Boolean {
+        val t = item.track
+        if (item.isTrack && t != null) {
+            val key = periodKey(item, d)
+            return item.id in marks(key) || (key == t.periodKey && t.portionDone)
+        }
         if (item.freq == Freq.ONCE) {
             return if (item.isUnits) item.unitsTotal > 0 && item.unitsLeft == 0 else item.id in marks("once")
         }
@@ -206,6 +223,11 @@ object Store {
 
     @Synchronized
     fun setDone(item: Item, d: LocalDate, done: Boolean) {
+        val t = item.track
+        if (item.isTrack && t != null && periodKey(item, d) == t.periodKey) {
+            if (done) learnedUpTo(item, t.periodStart + t.quota - 1) else undoToday(item)
+            return
+        }
         if (item.freq == Freq.ONCE && !item.isUnits) {
             if (done) marks("once").add(item.id) else marks("once").remove(item.id)
             save(); return
@@ -239,6 +261,77 @@ object Store {
             marks("d:$d").add("${item.id}+")  // activity, for the history strip
         }
         save()
+    }
+
+    // ----- tracks -----
+
+    /** Start a new day/week for every track: today's portion begins where you stopped. */
+    @Synchronized
+    fun rollover(today: LocalDate = today()) {
+        var changed = false
+        for (item in items) {
+            val t = item.track ?: continue
+            if (!item.isTrack) continue
+            val key = periodKey(item, today)
+            if (key != t.periodKey) { t.rollover(key); changed = true }
+        }
+        if (changed) save()
+    }
+
+    /** After editing a track's position: today's mark follows the position. */
+    @Synchronized
+    fun refreshMark(item: Item) = syncMark(item, progressed = false)
+
+    private fun syncMark(item: Item, progressed: Boolean = true) {
+        val t = item.track ?: return
+        if (t.periodKey.isEmpty()) return
+        val m = marks(t.periodKey)
+        if (t.portionDone) m.add(item.id) else m.remove(item.id)
+        if (progressed) marks("d:${today()}").add("${item.id}+")
+    }
+
+    /** Learned everything up to and including unit [last] (may be beyond today's portion). */
+    @Synchronized
+    fun learnedUpTo(item: Item, last: Int) {
+        val t = item.track ?: return
+        t.pos = (last + 1).coerceIn(0, t.size)
+        syncMark(item)
+        if (t.finished) finishCycle(item)
+        save()
+    }
+
+    /** Start from unit [unit] (skipped ahead, or went back). Today's portion restarts there. */
+    @Synchronized
+    fun jumpTo(item: Item, unit: Int) {
+        val t = item.track ?: return
+        t.pos = unit.coerceIn(0, t.size); t.periodStart = t.pos
+        marks(t.periodKey).remove(item.id)
+        save()
+    }
+
+    @Synchronized
+    fun undoToday(item: Item) {
+        val t = item.track ?: return
+        t.pos = t.periodStart
+        marks(t.periodKey).remove(item.id)
+        save()
+    }
+
+    /** Tap on one unit of today's portion: everything up to it is learned; tapping a learned one un-marks from there. */
+    @Synchronized
+    fun toggleTrackUnit(item: Item, unit: Int) {
+        val t = item.track ?: return
+        if (t.pos > unit) { t.pos = unit; syncMark(item, progressed = false); save() } else learnedUpTo(item, unit)
+    }
+
+    private fun finishCycle(item: Item) {
+        val t = item.track ?: return
+        val what = if (t.type == "gemara") "מסכת ${t.masechta}" else item.title
+        t.siyum = "סיימת את $what!"
+        t.siyumKey = t.periodKey
+        marks(t.periodKey).add(item.id)
+        val next = t.advanceMasechta()
+        if (next != null) t.siyum += " ממשיכים למסכת $next."
     }
 
     /** UNITS: the next unit that is not done yet, or -1. */
@@ -312,23 +405,32 @@ object Presets {
     data class Preset(val label: String, val sub: String, val make: () -> Item)
 
     val all = listOf(
-        Preset("חת\"ת", "חומש, תהילים, תניא – כל יום") {
-            Item(title = "חת\"ת", category = "שיעורים יומיים", parts = mutableListOf("חומש", "תהילים", "תניא"))
+        Preset("חת\"ת", "חומש, תהילים, תניא – עם תהילים של היום לפי התאריך") {
+            Item(title = "חת\"ת", category = "שיעורים יומיים", parts = mutableListOf("חומש", "תהילים", "תניא"), special = "chitas")
         },
-        Preset("רמב\"ם – 3 פרקים", "שלושה פרקים ליום") {
-            Item(title = "רמב\"ם – 3 פרקים", category = "שיעורים יומיים", parts = mutableListOf("פרק א׳", "פרק ב׳", "פרק ג׳"))
+        Preset("רמב\"ם – 3 פרקים", "ממשיך מהפרק שבו עצרת") {
+            Item(title = "רמב\"ם", category = "שיעורים יומיים", kind = Kind.TRACK, track = Track(type = "rambam", quota = 3))
         },
-        Preset("רמב\"ם – פרק אחד", "פרק ליום") { Item(title = "רמב\"ם – פרק אחד", category = "שיעורים יומיים") },
+        Preset("רמב\"ם – פרק אחד", "ממשיך מהפרק שבו עצרת") {
+            Item(title = "רמב\"ם", category = "שיעורים יומיים", kind = Kind.TRACK, track = Track(type = "rambam", quota = 1))
+        },
+        Preset("גמרא – דף ליום", "בוחרים מסכת; ממשיך מהדף שבו עצרת") {
+            Item(title = "גמרא", category = "גמרא", kind = Kind.TRACK, track = Track(type = "gemara", masechta = "פסחים"))
+        },
+        Preset("דרך מצוותיך", "עמודים ליום, ממשיך מהעמוד שבו עצרת") {
+            Item(title = "דרך מצוותיך", category = "חסידות", kind = Kind.TRACK, track = Track(type = "pages", quota = 2))
+        },
+        Preset("ליקוטי שיחות – שיחה ליום", "רשימת השיחות לפי הסדר") {
+            Item(title = "ליקוטי שיחות", category = "ליקוטי שיחות", kind = Kind.TRACK, track = Track(type = "list"))
+        },
+        Preset("ליקוטי שיחות – שיחה לשבוע", "פעם בשבוע") {
+            Item(title = "ליקוטי שיחות – שבועי", category = "ליקוטי שיחות", kind = Kind.TRACK, freq = Freq.WEEKLY, track = Track(type = "list"))
+        },
         Preset("ספר המצוות", "כל יום") { Item(title = "ספר המצוות", category = "שיעורים יומיים") },
         Preset("היום יום", "כל יום") { Item(title = "היום יום", category = "שיעורים יומיים") },
-        Preset("דף גמרא – גירסא", "דף ליום") { Item(title = "דף גמרא – גירסא", category = "גמרא") },
-        Preset("דרך מצוותיך", "התקדמות כל יום, עם מעקב עד הסיום") {
-            Item(title = "דרך מצוותיך", category = "חסידות", kind = Kind.UNITS, freq = Freq.DAILY)
+        Preset("רשימה לסיים עד תאריך", "למשל שיחות שצריך לסיים") {
+            Item(title = "", category = "", kind = Kind.UNITS, freq = Freq.ONCE)
         },
-        Preset("ליקוטי שיחות – שיחות לסיים", "רשימת שיחות ויעד") {
-            Item(title = "ליקוטי שיחות", category = "ליקוטי שיחות", kind = Kind.UNITS, freq = Freq.ONCE)
-        },
-        Preset("שיחה שבועית", "פעם בשבוע") { Item(title = "שיחה שבועית", category = "ליקוטי שיחות", freq = Freq.WEEKLY) },
     )
 }
 

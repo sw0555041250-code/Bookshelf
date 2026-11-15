@@ -39,6 +39,7 @@ class MainActivity : BaseActivity() {
         val c = page(greeting(), back = false)
         if (!Store.settings.onboarded) { onboarding(c); return }
         val today = Store.today()
+        Store.rollover(today)
 
         // date line + navigation
         val dateRow = hbox().apply { lp(bottom = 14) }
@@ -161,14 +162,14 @@ class MainActivity : BaseActivity() {
             list.addView(row)
         }
         c.addView(list)
-        c.addView(text("אפשר לשנות ולהוסיף הכול אחר כך. שיעורים עם רשימת יחידות (כמו דרך מצוותיך) נפתחים לעריכה כדי למלא את הרשימה.", 13f, color = Ink.GRAY).apply { lp(top = 8) })
+        c.addView(text("אפשר לשנות ולהוסיף הכול אחר כך. אחרי ההתחלה – לחיצה ארוכה על כל שיעור כדי לבחור מאיפה לומדים (ספר או תיקייה) ואיפה אתה עומד.", 13f, color = Ink.GRAY).apply { lp(top = 8) })
         c.addView(button("להתחיל") {
             Store.settings.name = name.text.toString().trim()
             Store.settings.onboarded = true
             onboardingPicks.sorted().forEach { Store.items.add(Presets.all[it].make()) }
             Store.save()
             Reminders.schedule(this)
-            val firstUnits = Store.items.firstOrNull { it.isUnits && it.unitsTotal == 0 }
+            val firstUnits = Store.items.firstOrNull { (it.isUnits && it.unitsTotal == 0) || (it.isTrack && it.track!!.size == 0) }
             if (firstUnits != null) startActivity(Intent(this, EditActivity::class.java).putExtra("id", firstUnits.id))
             render()
         }.apply { lp(top = 20); gravity = Gravity.CENTER })

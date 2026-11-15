@@ -21,6 +21,7 @@ class ReminderActivity : BaseActivity() {
 
     private fun render() {
         val today = Store.today()
+        Store.rollover(today)
         val pending = Store.pending(today)
         val name = Store.settings.name
         val c = page("תזכורת", back = true)

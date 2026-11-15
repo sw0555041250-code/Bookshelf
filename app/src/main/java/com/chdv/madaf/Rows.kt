@@ -153,7 +153,7 @@ fun BaseActivity.itemRow(item: Item, d: LocalDate, changed: () -> Unit, edit: ((
     val box = vbox().apply { setPadding(0, dp(10), 0, dp(10)) }
     val row = hbox()
 
-    val hasParts = !item.isUnits && item.parts.isNotEmpty()
+    val hasParts = !item.isUnits && !item.isTrack && item.parts.isNotEmpty()
     val partsDone = if (hasParts) Store.partsDoneCount(item, d) else 0
     val showCheck = !(item.isUnits && item.freq == Freq.ONCE)
     if (showCheck) {
@@ -183,7 +183,7 @@ fun BaseActivity.itemRow(item: Item, d: LocalDate, changed: () -> Unit, edit: ((
     if (meta.isNotEmpty()) texts.addView(text(meta.joinToString("  ·  "), 14f, color = Ink.GRAY))
     row.addView(texts, LinearLayout.LayoutParams(0, WRAP, 1f))
 
-    if (item.linkType.isNotEmpty()) {
+    if (item.linkType.isNotEmpty() && !item.isTrack) {
         row.addView(button("פתיחה", primary = false, small = true) { openLink(item) })
     }
     box.addView(row)
@@ -191,10 +191,13 @@ fun BaseActivity.itemRow(item: Item, d: LocalDate, changed: () -> Unit, edit: ((
     if (hasParts) {
         val flow = FlowLayout(this, dp(8)).apply { setPadding(if (showCheck) dp(54) else 0, dp(10), 0, 0) }
         item.parts.forEachIndexed { i, p ->
-            flow.addView(chip(p, Store.isPartDone(item, i, d)) { Store.togglePart(item, i, d); changed() })
+            val hint = if (item.special == "chitas") chitasHint(p, d) else null
+            flow.addView(chip(if (hint != null) "$p · $hint" else p, Store.isPartDone(item, i, d)) { Store.togglePart(item, i, d); changed() })
         }
         box.addView(flow)
     }
+
+    if (item.isTrack) box.addView(trackBody(item, d, if (showCheck) dp(54) else 0, changed))
 
     if (item.isUnits) {
         val inner = vbox().apply { setPadding(if (showCheck) dp(54) else 0, dp(10), 0, 0) }
@@ -224,8 +227,131 @@ fun BaseActivity.itemRow(item: Item, d: LocalDate, changed: () -> Unit, edit: ((
     if (edit != null) {
         box.isLongClickable = true
         box.setOnLongClickListener { edit(); true }
-        texts.setOnClickListener { if (item.isUnits && openGoal != null) openGoal() else if (showCheck) { Store.setDone(item, d, !done); changed() } }
+        texts.setOnClickListener {
+            if (item.isUnits && openGoal != null) openGoal()
+            else if (item.isTrack) item.track?.let { t -> Opener.openUnit(this, item, t.portion.firstOrNull() ?: t.pos.coerceAtMost(t.size - 1)) }
+            else if (showCheck) { Store.setDone(item, d, !done); changed() }
+        }
         texts.setOnLongClickListener { edit(); true }
     }
     return box
 }
+
+/** Choose a unit of a track. Rambam: first the הלכות, then the chapter. */
+fun BaseActivity.pickUnit(t: Track, title: String, onPick: (Int) -> Unit) {
+    fun list(labels: List<String>, current: Int, pick: (Int) -> Unit) {
+        val d = AlertDialog.Builder(this, android.R.style.Theme_DeviceDefault_Light_Dialog_Alert)
+            .setTitle(title)
+            .setItems(labels.toTypedArray()) { _, w -> pick(w) }
+            .setNegativeButton("ביטול", null)
+            .create()
+        d.show()
+        d.listView?.setSelection((current - 2).coerceAtLeast(0))
+    }
+    if (t.size == 0) { info("אין יחידות", "קודם צריך להגדיר את המסלול."); return }
+    if (t.type == "rambam") {
+        val starts = Rambam.hilchotStarts
+        val curH = starts.indexOfLast { it.second <= t.pos.coerceAtMost(t.size - 1) }
+        list(starts.map { it.first }, curH) { h ->
+            val from = starts[h].second
+            val to = starts.getOrNull(h + 1)?.second ?: t.size
+            list((from until to).map { "פרק ${Gematria.of(Rambam.chapters[it].chapter)}" }, 0) { c -> onPick(from + c) }
+        }
+    } else {
+        list((0 until t.size).map { t.label(it) }, t.pos)  { onPick(it) }
+    }
+}
+
+/** Today's portion of a running track, with everything needed to move along. */
+fun BaseActivity.trackBody(item: Item, d: LocalDate, indent: Int, changed: () -> Unit): View {
+    val t = item.track!!
+    val box = vbox().apply { setPadding(indent, dp(8), 0, 0) }
+    val current = Store.periodKey(item, d) == t.periodKey
+    if (!current) {
+        box.addView(text(if (Store.isDone(item, d)) "נלמד" else "לא סומן", 14f, color = Ink.GRAY))
+        return box
+    }
+    if (t.siyum.isNotEmpty() && t.siyumKey == t.periodKey) {
+        box.addView(card(filled = true).apply {
+            setPadding(dp(14), dp(10), dp(14), dp(10))
+            addView(text("🎉 ${t.siyum}", 16f, bold = true, color = Ink.WHITE))
+        })
+        box.addView(View(this).apply { layoutParams = LinearLayout.LayoutParams(1, dp(8)) })
+    }
+    if (t.size == 0) {
+        box.addView(chip("להשלמת ההגדרה  ›", false) { startActivity(Intent(this, EditActivity::class.java).putExtra("id", item.id)) })
+        return box
+    }
+    val portion = t.portion
+    if (!portion.isEmpty()) {
+        val head = if (t.portionDone) "היום למדת:" else if (item.freq == Freq.WEEKLY) "השבוע:" else "היום:"
+        box.addView(text("$head ${t.portionLabel()}", 18f, bold = true))
+        if (portion.count() > 1) {
+            val flow = FlowLayout(this, dp(8)).apply { setPadding(0, dp(8), 0, 0) }
+            for (u in portion) flow.addView(chip(t.label(u), t.pos > u) { Store.toggleTrackUnit(item, u); changed() })
+            box.addView(flow)
+        }
+        if (t.pos > portion.last + 1) box.addView(text("ועוד – הגעת עד ${t.label(t.pos - 1)}. יישר כח!", 14f, bold = true).apply { lp(top = 4) })
+    } else if (t.finished) {
+        box.addView(text("סיימת את כל המסלול!", 18f, bold = true))
+    }
+    // overall progress
+    box.addView(progressBar(t.pos.toFloat() / t.size, 10).apply { lp(top = 10) })
+    val left = t.size - t.pos
+    val perPeriod = t.quota
+    val eta = if (left > 0) " · עוד כ-${Math.ceil(left.toDouble() / perPeriod).toInt()} ${if (item.freq == Freq.WEEKLY) "שבועות" else "ימים"}" else ""
+    val where = if (t.type == "gemara") "מסכת ${t.masechta}: " else ""
+    box.addView(text("$where${t.pos} מתוך ${t.size}$eta", 13f, color = Ink.GRAY).apply { lp(top = 4) })
+
+    val actions = FlowLayout(this, dp(8)).apply { setPadding(0, dp(10), 0, 0) }
+    val openUnit = if (t.portionDone && !t.finished) t.pos.coerceAtMost(t.size - 1) else portion.firstOrNull() ?: (t.size - 1)
+    if (t.sourceType.isNotEmpty() || item.linkType.isNotEmpty()) {
+        actions.addView(chip("📖  פתיחה", true) { Opener.openUnit(this, item, openUnit) })
+    }
+    actions.addView(chip("למדתי עד…", false) {
+        pickUnit(t, "עד איפה למדת?") { Store.learnedUpTo(item, it); changed() }
+    })
+    actions.addView(chip("⋯", false) { trackMenu(item, openUnit, changed) })
+    box.addView(actions)
+    return box
+}
+
+fun BaseActivity.trackMenu(item: Item, unit: Int, changed: () -> Unit) {
+    val t = item.track ?: return
+    val labels = arrayListOf("להתחיל ממקום אחר (דילגתי / חזרתי)", "ביטול הסימון של היום")
+    if (t.sourceType.isNotEmpty()) labels += "הספר נפתח בעמוד לא נכון – תיקון"
+    labels += "עריכת המסלול"
+    AlertDialog.Builder(this, android.R.style.Theme_DeviceDefault_Light_Dialog_Alert)
+        .setTitle(item.title)
+        .setItems(labels.toTypedArray()) { _, w ->
+            when (labels[w]) {
+                labels[0] -> pickUnit(t, "מאיפה ממשיכים?") { Store.jumpTo(item, it); changed() }
+                labels[1] -> { Store.undoToday(item); changed() }
+                "הספר נפתח בעמוד לא נכון – תיקון" -> Opener.resolve(this, item, unit) { doc ->
+                    if (doc == null) return@resolve
+                    val cur = t.pageFor(unit, doc.name).coerceAtLeast(1)
+                    pickNumber("באיזה עמוד בקובץ מתחיל ${t.fullLabel(unit)}?", 1, 5000, cur) { p ->
+                        t.setAnchor(doc.name, unit, p); Store.save()
+                        Toast.makeText(this, "נשמר – מעכשיו ייפתח במקום הנכון", Toast.LENGTH_SHORT).show()
+                    }
+                }
+                "עריכת המסלול" -> startActivity(Intent(this, EditActivity::class.java).putExtra("id", item.id))
+            }
+        }
+        .show()
+}
+
+/** Chitas: what today's portion is, where it can be computed. */
+fun chitasHint(part: String, d: LocalDate): String? = runCatching {
+    when {
+        part.contains("תהילים") -> {
+            val cal = android.icu.util.HebrewCalendar()
+            cal.time = Date.from(d.atTime(12, 0).atZone(ZoneId.systemDefault()).toInstant())
+            val day = cal.get(android.icu.util.Calendar.DAY_OF_MONTH)
+            val len = cal.getActualMaximum(android.icu.util.Calendar.DAY_OF_MONTH)
+            Chitas.tehillimFor(day, len)
+        }
+        part.contains("חומש") -> Chitas.chumashFor(dowIndex(d))
+        else -> null
+    }
+}.getOrNull()
