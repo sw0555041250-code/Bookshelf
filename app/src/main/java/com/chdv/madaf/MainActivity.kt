@@ -26,6 +26,7 @@ class MainActivity : BaseActivity() {
         // A new learning day may have started while we were in the background
         if (Store.today() != lastToday) { lastToday = Store.today(); day = lastToday }
         render()
+        Updater.dailyCheck(this)
     }
 
     private fun greeting(): String {

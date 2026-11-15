@@ -123,6 +123,13 @@ class SettingsActivity : BaseActivity() {
         backup.addView(br)
         c.addView(backup)
 
+        c.addView(section("עדכונים"))
+        val upd = card()
+        upd.addView(clickRow("בדיקת עדכונים", "גרסה ${Updater.version(this)}") { Updater.check(this, silent = false) })
+        upd.addView(divider())
+        upd.addView(toggleRow("עדכון אוטומטי", "בודק פעם ביום ומציע להתקין גרסה חדשה. השיעורים וההתקדמות נשמרים", Updater.autoEnabled(this)) { Updater.setAuto(this, it) })
+        c.addView(upd)
+
         c.addView(text("המדף · גרסה ${runCatching { packageManager.getPackageInfo(packageName, 0).versionName }.getOrDefault("")}", 13f, color = Ink.GRAY).apply {
             lp(top = 24); textAlignment = View.TEXT_ALIGNMENT_CENTER
         })
