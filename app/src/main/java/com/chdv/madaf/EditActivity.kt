@@ -87,7 +87,7 @@ class EditActivity : BaseActivity() {
 
     /** Callers run collect() first when the fields may hold unsaved typing. */
     private fun render() {
-        val c = page(if (isNew) "הוספה למדף" else "עריכה", back = true, key = "edit")
+        val c = page(if (isNew) "שיעור חדש" else "עריכה", back = true, key = "edit")
 
         titleEdit = field("שם", item.title, "למשל: חת\"ת, רמב\"ם, דף יומי")
         categoryEdit = field("קטגוריה", item.category, "למשל: שיעורים יומיים")
@@ -184,7 +184,7 @@ class EditActivity : BaseActivity() {
         }
         c.addView(actions)
         if (!isNew) {
-            c.addView(button(if (item.archived) "החזרה למדף" else "הסתרה מהמדף (בלי למחוק)", primary = false, small = true) {
+            c.addView(button(if (item.archived) "החזרה לרשימה" else "הסתרה (בלי למחוק)", primary = false, small = true) {
                 collect(); item.archived = !item.archived; save()
             }.apply { lp(top = 12) })
         }
@@ -318,7 +318,7 @@ class EditActivity : BaseActivity() {
     private fun confirmDelete() {
         AlertDialog.Builder(this, android.R.style.Theme_DeviceDefault_Light_Dialog_Alert)
             .setTitle("למחוק את \"${item.title}\"?")
-            .setMessage("ההיסטוריה של השיעור תימחק. אפשר במקום זה להסתיר אותו מהמדף.")
+            .setMessage("ההיסטוריה של השיעור תימחק. אפשר במקום זה להסתיר אותו.")
             .setPositiveButton("מחיקה") { _, _ ->
                 Store.items.removeAll { it.id == item.id }
                 Store.save(); Reminders.schedule(this); finish()
@@ -424,7 +424,7 @@ class EditActivity : BaseActivity() {
             }.apply { lp(WRAP, top = 8) })
         }
         if (t.sourceType == "file" && t.type != "pages") {
-            label("התאמת עמודים (לא חובה)", "כדי שהספר ייפתח בדיוק במקום. אפשר גם לתקן אחר כך מתוך המדף (⋯ › תיקון).")
+            label("התאמת עמודים (לא חובה)", "כדי שהספר ייפתח בדיוק במקום. אפשר גם לתקן אחר כך מתוך הרשימה (⋯ › תיקון).")
             val r = FlowLayout(this, dp(8))
             r.addView(chip(if (t.firstPage > 0) "${t.label(0)} בעמוד ${t.firstPage}" else "באיזה עמוד מתחיל ${t.label(0)}?", t.firstPage > 0) {
                 collect(); pickNumber("באיזה עמוד בקובץ מתחיל ${t.label(0)}?", 1, 5000, t.firstPage.coerceAtLeast(1)) { t.firstPage = it; render() }

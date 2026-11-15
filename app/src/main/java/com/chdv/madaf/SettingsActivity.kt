@@ -85,9 +85,9 @@ class SettingsActivity : BaseActivity() {
         rem.addView(clickRow("פעולה ברקע", "כדי שהתזכורות יגיעו בזמן גם כשהמכשיר במנוחה") { askBattery() })
         c.addView(rem)
 
-        c.addView(section("כל מה שעל המדף"))
+        c.addView(section("כל השיעורים"))
         val all = card()
-        if (Store.items.isEmpty()) all.addView(text("המדף ריק", 15f, color = Ink.GRAY))
+        if (Store.items.isEmpty()) all.addView(text("עוד אין שיעורים", 15f, color = Ink.GRAY))
         Store.items.forEachIndexed { i, item ->
             if (i > 0) all.addView(divider())
             val row = hbox()
@@ -112,7 +112,7 @@ class SettingsActivity : BaseActivity() {
         val br = hbox().apply { lp(top = 12) }
         br.addView(button("שמירת גיבוי", small = true) {
             val i = Intent(Intent.ACTION_CREATE_DOCUMENT).addCategory(Intent.CATEGORY_OPENABLE).setType("application/json")
-                .putExtra(Intent.EXTRA_TITLE, "madaf-backup-${LocalDate.now()}.json")
+                .putExtra(Intent.EXTRA_TITLE, "kviut-backup-${LocalDate.now()}.json")
             runCatching { startActivityForResult(i, REQ_EXPORT) }
         }, LinearLayout.LayoutParams(0, WRAP, 1f))
         br.addView(View(this), LinearLayout.LayoutParams(dp(10), 1))
@@ -130,7 +130,7 @@ class SettingsActivity : BaseActivity() {
         upd.addView(toggleRow("עדכון אוטומטי", "בודק פעם ביום ומציע להתקין גרסה חדשה. השיעורים וההתקדמות נשמרים", Updater.autoEnabled(this)) { Updater.setAuto(this, it) })
         c.addView(upd)
 
-        c.addView(text("המדף · גרסה ${runCatching { packageManager.getPackageInfo(packageName, 0).versionName }.getOrDefault("")}", 13f, color = Ink.GRAY).apply {
+        c.addView(text("קביעות · גרסה ${runCatching { packageManager.getPackageInfo(packageName, 0).versionName }.getOrDefault("")}", 13f, color = Ink.GRAY).apply {
             lp(top = 24); textAlignment = View.TEXT_ALIGNMENT_CENTER
         })
     }
@@ -150,13 +150,13 @@ class SettingsActivity : BaseActivity() {
                     val json = contentResolver.openInputStream(uri)!!.use { it.readBytes().toString(Charsets.UTF_8) }
                     android.app.AlertDialog.Builder(this, android.R.style.Theme_DeviceDefault_Light_Dialog_Alert)
                         .setTitle("לשחזר מהגיבוי?")
-                        .setMessage("כל מה שנמצא עכשיו במדף יוחלף בתוכן הגיבוי.")
+                        .setMessage("כל מה שנמצא עכשיו באפליקציה יוחלף בתוכן הגיבוי.")
                         .setPositiveButton("שחזור") { _, _ ->
                             try {
                                 Store.import(json); Store.settings.onboarded = true; Store.save()
                                 Reminders.schedule(this); render()
                                 Toast.makeText(this, "שוחזר", Toast.LENGTH_SHORT).show()
-                            } catch (e: Exception) { info("שגיאה", "הקובץ לא נראה כמו גיבוי של המדף.") }
+                            } catch (e: Exception) { info("שגיאה", "הקובץ לא נראה כמו גיבוי של קביעות.") }
                         }
                         .setNegativeButton("ביטול", null).show()
                 }
@@ -169,7 +169,7 @@ class SettingsActivity : BaseActivity() {
     private fun askBattery() {
         val pm = getSystemService(PowerManager::class.java)
         if (pm.isIgnoringBatteryOptimizations(packageName)) {
-            info("הכול מוכן", "האפליקציה כבר רשאית לפעול ברקע.\n\nב-BOOX כדאי גם לוודא שהיא לא מוקפאת: אפליקציות › ניהול אפליקציות › המדף › לבטל הקפאה.")
+            info("הכול מוכן", "האפליקציה כבר רשאית לפעול ברקע.\n\nב-BOOX כדאי גם לוודא שהיא לא מוקפאת: אפליקציות › ניהול אפליקציות › קביעות › לבטל הקפאה.")
             return
         }
         runCatching {

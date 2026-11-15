@@ -69,7 +69,7 @@ class MainActivity : BaseActivity() {
         if (weekly.isNotEmpty()) section(c, "השבוע", weekly)
         if (goals.isNotEmpty()) section(c, "יעדים", goals)
         if (visible.isEmpty()) {
-            c.addView(text("אין כלום על המדף להיום. הוסף שיעור או יעד.", 16f, color = Ink.GRAY).apply { lp(top = 20) })
+            c.addView(text("אין שיעורים להיום. הוסף שיעור או יעד.", 16f, color = Ink.GRAY).apply { lp(top = 20) })
         }
 
         val bottom = hbox().apply { lp(top = 26) }
@@ -86,7 +86,7 @@ class MainActivity : BaseActivity() {
         val big = text(if (total == 0) "—" else "$done/$total", 40f, bold = true, color = Ink.WHITE).apply { textDirection = View.TEXT_DIRECTION_LTR }
         val texts = vbox().apply { setPadding(dp(16), 0, 0, 0) }
         val msg = when {
-            total == 0 -> "המדף מחכה לשיעור הראשון"
+            total == 0 -> "עוד לא נקבע אף שיעור"
             done == total -> "סיימת הכול. יישר כח!"
             done == 0 -> "בהצלחה בלימוד היום"
             else -> "נשארו עוד ${total - done}"
@@ -126,7 +126,7 @@ class MainActivity : BaseActivity() {
     private fun addDialog() {
         val items = (Presets.all.map { it.label } + "שיעור / יעד משלי…").toTypedArray()
         android.app.AlertDialog.Builder(this, android.R.style.Theme_DeviceDefault_Light_Dialog_Alert)
-            .setTitle("מה להוסיף למדף?")
+            .setTitle("מה להוסיף לקביעות?")
             .setItems(items) { _, which ->
                 val item = if (which < Presets.all.size) Presets.all[which].make() else Item(title = "")
                 startActivity(Intent(this, EditActivity::class.java).putExtra("new", item.toJson().toString()))
@@ -136,12 +136,12 @@ class MainActivity : BaseActivity() {
 
     /** First run: name + choose what to put on the shelf. */
     private fun onboarding(c: LinearLayout) {
-        setPageTitle("ברוך הבא למדף")
-        c.addView(text("המדף מזכיר לך מה עוד לא למדת היום, עוקב אחרי ההתקדמות ביעדים, ופותח את הספר בלחיצה.", 16f, color = Ink.GRAY))
+        setPageTitle("ברוך הבא ל\"קביעות\"")
+        c.addView(text("\"קבעת עתים לתורה?\" – האפליקציה מזכירה לך מה עוד לא למדת היום, עוקב אחרי ההתקדמות ביעדים, ופותח את הספר בלחיצה.", 16f, color = Ink.GRAY))
         c.addView(text("איך קוראים לך?", 18f, bold = true).apply { lp(top = 22, bottom = 6) })
         val name = EditText(this).apply { hint = "השם שלך"; textDirection = View.TEXT_DIRECTION_RTL; setSingleLine() }
         c.addView(name)
-        c.addView(text("מה לשים על המדף?", 18f, bold = true).apply { lp(top = 22, bottom = 6) })
+        c.addView(text("מה הקביעות שלך?", 18f, bold = true).apply { lp(top = 22, bottom = 6) })
         val list = card()
         Presets.all.forEachIndexed { i, p ->
             if (i > 0) list.addView(divider())

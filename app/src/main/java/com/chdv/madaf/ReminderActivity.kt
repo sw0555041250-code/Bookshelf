@@ -46,7 +46,7 @@ class ReminderActivity : BaseActivity() {
         val row = hbox().apply { lp(top = 22) }
         row.addView(button("תזכיר לי בעוד ${Store.settings.snoozeMinutes} דק׳") { Reminders.snooze(this); finish() }, LinearLayout.LayoutParams(0, WRAP, 1f))
         row.addView(View(this), LinearLayout.LayoutParams(dp(10), 1))
-        row.addView(button("למדף", primary = false) {
+        row.addView(button("לכל השיעורים", primary = false) {
             startActivity(Intent(this, MainActivity::class.java)); finish()
         }, LinearLayout.LayoutParams(0, WRAP, 1f))
         c.addView(row)
